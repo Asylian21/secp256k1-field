@@ -1,12 +1,17 @@
 // Package field implements fast fixed-precision arithmetic over the secp256k1
 // base field Fp, where p = 2^256 - 2^32 - 977.
 //
+// The package is intended for Go developers building Bitcoin research tools,
+// ECDSA / secp256k1 benchmarks, affine point-walking experiments, public
+// key-space simulations, or other performance-sensitive cryptography tooling
+// around non-secret field values.
+//
 // It is a drop-in-shaped replacement for the field type used by elliptic-curve
 // code that walks many points (for example batched affine point addition with a
 // single Montgomery inversion): the method set and magnitude semantics mirror
 // the decred/dcrd secp256k1 FieldVal so existing hot loops can switch types with
-// minimal changes, while the internals use a 5x52-bit limb layout that maps
-// directly onto native 64x64->128 multiplies.
+// minimal changes, while the internals use a libsecp256k1-style 5x52-bit limb
+// layout that maps directly onto native 64x64->128 multiplies.
 //
 // # Representation
 //

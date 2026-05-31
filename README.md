@@ -1,24 +1,46 @@
 # secp256k1-field
 
+**Fast secp256k1 finite-field arithmetic for Go, tuned for Bitcoin and ECDSA
+research workloads.**
+
 [![CI](https://github.com/Asylian21/secp256k1-field/actions/workflows/ci.yml/badge.svg)](https://github.com/Asylian21/secp256k1-field/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/Asylian21/secp256k1-field.svg)](https://pkg.go.dev/github.com/Asylian21/secp256k1-field)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Fast fixed-precision arithmetic over the secp256k1 base field:
+`secp256k1-field` is a high-performance Go library for fixed-precision
+arithmetic over the secp256k1 base field:
 
 ```text
 p = 2^256 - 2^32 - 977
 ```
 
-`secp256k1-field` provides `field.Val`, a high-throughput Go field element for
-workloads that walk large numbers of secp256k1 points, run benchmarks, or study
-Bitcoin key-space mechanics. The public method set and magnitude semantics mirror
+It provides `field.Val`, a high-throughput field element for Go developers
+building Bitcoin research tools, ECDSA / secp256k1 benchmarks, affine point
+walking experiments, public key-space simulations, or performance-sensitive
+cryptography tooling. The public method set and magnitude semantics mirror
 [`decred/dcrd`'s `secp256k1.FieldVal`](https://pkg.go.dev/github.com/decred/dcrd/dcrec/secp256k1/v4),
 so existing hot loops can usually switch with small, mechanical edits.
 
 Internally, the package uses the libsecp256k1-style **5x52-bit limb layout**,
 mapping field multiplication to native `64x64->128` products instead of a
 10x26 schoolbook schedule.
+
+## Who This Is For
+
+Use this package when you need fast, allocation-free arithmetic modulo the
+secp256k1 prime in Go and your workload is built around public or non-secret
+field values:
+
+- Bitcoin, ECDSA, and secp256k1 researchers comparing field implementations.
+- Go developers porting tight loops from dcrd's `secp256k1.FieldVal`.
+- Benchmark authors measuring 5x52-bit limbs, BMI2 `MULX`, arm64 `UMULH`, or
+  generic `math/bits` arithmetic.
+- Engineers building point-walking, simulation, fuzzing, or educational tools
+  where throughput matters more than constant-time behavior.
+
+If you are processing private keys, wallet seed material, signing secrets, or
+any value where timing side channels matter, use a constant-time secp256k1
+library instead.
 
 ## Highlights
 
@@ -162,6 +184,25 @@ go test -race ./...
 - [CONTRIBUTING.md](CONTRIBUTING.md) describes the standards for tests, style,
   and backend changes.
 - [CHANGELOG.md](CHANGELOG.md) tracks releases using Semantic Versioning.
+
+## Search Keywords
+
+`secp256k1`, `secp256k1 field arithmetic`, `Go secp256k1`, `Bitcoin
+cryptography`, `ECDSA field arithmetic`, `finite field arithmetic`, `dcrd
+FieldVal`, `libsecp256k1 field_5x52`, `5x52 limbs`, `BMI2 MULX`, `arm64 UMULH`,
+`zero allocation Go crypto benchmarks`.
+
+Suggested GitHub repository description:
+
+```text
+Fast secp256k1 finite-field arithmetic for Go: dcrd FieldVal-compatible API, 5x52 limbs, pure Go plus arm64/amd64 assembly.
+```
+
+Suggested GitHub topics:
+
+```text
+secp256k1 bitcoin ecdsa cryptography finite-field go golang dcrd libsecp256k1 field-arithmetic elliptic-curves benchmarking assembly arm64 amd64 bmi2
+```
 
 ## Open Source
 
