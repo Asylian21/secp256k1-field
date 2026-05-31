@@ -1,0 +1,93 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-14]
+        go: ['1.22.x', '1.23.x']
+        include:
+          - os: ubuntu-latest
+            goarch: amd64
+          - os: ubuntu-24.04-arm
+            goarch: arm64
+          - os: macos-14
+            goarch: arm64
+    runs-on: ${{ matrix.os }}
+    env:
+      GOARCH: ${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+      # Default backend (assembler on arm64 and on amd64 runners with BMI2).
+      - run: go test -count=1 ./...
+      # Forced backends: the differential and asm-vs-generic suites run against
+      # each kernel. On the amd64 runner "asm" exercises the MULX kernel natively.
+      - run: GOSECP256K1FIELD_FORCE=generic go test -count=1 ./...
+      - run: GOSECP256K1FIELD_FORCE=asm go test -count=1 ./...
+      - run: go test -race -count=1 ./...
+      - run: go test -run '^$' -bench '^(BenchmarkMul|BenchmarkSquare)$' -benchmem -benchtime=100ms ./...
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go install honnef.co/go/tools/cmd/staticcheck@2024.1.1
+      - run: staticcheck ./...
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Run tests with coverage
+        run: go test -covermode=atomic -coverprofile=coverage.out .
+      - name: Enforce coverage threshold
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub(/%/, "", $3); print $3}')
+          threshold=90.0
+          echo "library coverage: ${total}% (threshold ${threshold}%)"
+          awk -v c="$total" -v t="$threshold" 'BEGIN { exit (c+0 >= t+0) ? 0 : 1 }' \
+            || { echo "::error::coverage ${total}% is below the ${threshold}% threshold"; exit 1; }
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      # Short smoke fuzzing to catch regressions against the dcrd oracle; longer
+      # campaigns run out of band.
+      - run: go test -run '^$' -fuzz '^FuzzMul$' -fuzztime=20s .
+      - run: go test -run '^$' -fuzz '^FuzzSquare$' -fuzztime=20s .
+      - run: go test -run '^$' -fuzz '^FuzzInverse$' -fuzztime=20s .
+      - run: go test -run '^$' -fuzz '^FuzzAddNegate$' -fuzztime=20s .
+
+  cross-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      # Build (and vet) the package and its tests for every target without
+      # running them, so a compile/assemble break on any arch fails fast.
+      - run: GOOS=linux GOARCH=amd64 go test -exec=true ./...
+      - run: GOOS=linux GOARCH=arm64 go test -exec=true ./...
+      - run: GOOS=linux GOARCH=386 go test -exec=true ./...
+      - run: GOOS=linux GOARCH=ppc64le go test -exec=true ./...

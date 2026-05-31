@@ -1,0 +1,16 @@
+# Test binaries and build output
+*.test
+*.out
+*.prof
+coverage.html
+
+# Benchmark/profiling scratch
+*.txt.bak
+cpu.out
+mem.out
+
+# Fuzz corpus cache
+testdata/fuzz/
+
+# Editor/OS noise
+.DS_Store
