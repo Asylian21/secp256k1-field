@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-05
+
+### Changed
+
+- ARM64 multiply and square kernels use `EXTR` for wide shifts and `LDP` for
+  adjacent input limbs. The generic reduction schedule and exact limb output
+  stay the same.
+- `Inverse` uses a fixed addition chain (255 squarings and 15 multiplications).
+  The ARM64 repeated-square kernel keeps intermediate limbs in registers and
+  writes only the final result.
+- `SetBytes` and `PutBytesUnchecked` pack field elements with native 64-bit
+  big-endian loads and stores.
+- `Normalize` skips the second carry pass when its final reduction factor is
+  zero. This remains a variable-time implementation for public values.
+
+### Added
+
+- Benchmarks, plus local Apple M5 Pro results in `PERFORMANCE.md`. On that
+  machine the medians improved by 1.09× (`Mul`), 1.14× (`Square`), 1.38×
+  (`Inverse`), 2.24× (`SetBytes`), 1.94× (`PutBytesUnchecked`), and 1.28×
+  (`Normalize`).
+
 ## [0.1.0] - 2026-05-31
 
 Initial release.
@@ -31,5 +53,6 @@ Initial release.
   `FuzzAddNegate` targets.
 - Documentation: `README`, `SPEC`, `PERFORMANCE`, `CONTRIBUTING`.
 
-[Unreleased]: https://github.com/Asylian21/secp256k1-field/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Asylian21/secp256k1-field/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Asylian21/secp256k1-field/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Asylian21/secp256k1-field/releases/tag/v0.1.0
