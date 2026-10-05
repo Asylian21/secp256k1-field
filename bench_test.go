@@ -107,3 +107,31 @@ func BenchmarkMulSquareChain(b *testing.B) {
 		sink.SquareVal(&sink)
 	}
 }
+
+var sinkBytes [32]byte
+
+func BenchmarkSetBytes(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		sink.SetBytes(&benchA)
+	}
+}
+
+func BenchmarkPutBytes(b *testing.B) {
+	x, _ := benchOperands()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		x.PutBytesUnchecked(sinkBytes[:])
+	}
+}
+
+func BenchmarkNormalize(b *testing.B) {
+	x, y := benchOperands()
+	x.Add(&y)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sink.Set(&x).Normalize()
+	}
+}

@@ -73,3 +73,36 @@ benchstat generic.txt asm.txt
   low result limbs are held in registers that are already dead at that point and
   flushed only after the final input read — preserving aliasing safety with no
   extra memory traffic and no stack frame.
+
+## Local Apple M5 Pro tuning (2026-10-04)
+
+Go 1.22.5, `darwin/arm64`, `-cpu=1`, six samples per state, interleaved
+before/after runs with `-benchtime=150ms`. These are local microbenchmarks;
+consumer throughput also depends on its batching and hashing workload.
+All measurements below retain zero allocations.
+
+| Operation | Original median | Tuned median | Speedup |
+| --- | ---: | ---: | ---: |
+| `Mul` | 8.3325 ns | 7.6135 ns | 1.09x |
+| `Square` | 6.295 ns | 5.511 ns | 1.14x |
+| `Inverse` | 3,421.5 ns | 2,486.5 ns | 1.38x |
+| `SetBytes` | 2.224 ns | 0.993 ns | 2.24x |
+| `PutBytesUnchecked` | 2.338 ns | 1.203 ns | 1.94x |
+| `Normalize` (magnitude 2, typical residue) | 2.049 ns | 1.6025 ns | 1.28x |
+
+The inverse uses a fixed addition chain with 255 squarings and 15
+multiplications. Its ARM64 repeated-square kernel retains intermediate limbs
+in registers and writes only the final result; other backends preserve their
+normal multiply/square selection. All ARM64 kernels use `EXTR` for wide shifts
+and `LDP` for adjacent input limbs, preserving the generic reduction schedule
+and exact limb output. Packing uses four native 64-bit endian
+loads/stores. Normalization skips the second carry pass when its final
+reduction factor is zero. This remains a variable-time package for public
+values, as documented in the README; the new normalization fast path does not
+provide a constant-time guarantee.
+
+```sh
+go test -run '^$' \
+  -bench '^(BenchmarkMul|BenchmarkSquare|BenchmarkInverse|BenchmarkSetBytes|BenchmarkPutBytes|BenchmarkNormalize)$' \
+  -benchmem -cpu=1 -benchtime=150ms -count=6 .
+```

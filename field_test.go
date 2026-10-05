@@ -203,3 +203,97 @@ func TestBackendReported(t *testing.T) {
 		t.Fatalf("active backend %q computed 2*3 = %s, want 6", Backend(), r.String())
 	}
 }
+
+// Raw limbs test both final-reduction paths independently of SetBytes, including
+// carry propagation into bit 256 and the maximum documented add/negate range.
+func TestNormalizeWideLimbs(t *testing.T) {
+	vectors := [][5]uint64{
+		{p0, limbMask, limbMask, limbMask, limb4Mask},
+		{p0 + 1, limbMask, limbMask, limbMask, limb4Mask},
+		{limbMask + 1, limbMask, limbMask, limbMask, limb4Mask},
+		{0, 0, 0, limbMask + 1, limb4Mask},
+		{0, 0, 0, 0, limb4Mask + 1},
+	}
+	rng := rand.New(rand.NewSource(0x4e6f726d))
+	for magnitude := uint64(1); magnitude <= 32; magnitude++ {
+		vectors = append(vectors, [5]uint64{
+			2 * magnitude * limbMask, 2 * magnitude * limbMask,
+			2 * magnitude * limbMask, 2 * magnitude * limbMask,
+			2 * magnitude * limb4Mask,
+		})
+		for i := 0; i < 64; i++ {
+			vectors = append(vectors, [5]uint64{
+				rng.Uint64() % (2 * magnitude * limbMask),
+				rng.Uint64() % (2 * magnitude * limbMask),
+				rng.Uint64() % (2 * magnitude * limbMask),
+				rng.Uint64() % (2 * magnitude * limbMask),
+				rng.Uint64() % (2 * magnitude * limb4Mask),
+			})
+		}
+	}
+	for i, limbs := range vectors {
+		want := new(big.Int)
+		for limb := 4; limb >= 0; limb-- {
+			want.Lsh(want, limbBits)
+			want.Add(want, new(big.Int).SetUint64(limbs[limb]))
+		}
+		want.Mod(want, fieldPrime)
+		v := Val{n: limbs}
+		v.Normalize()
+		if *v.Bytes() != *bigToBytes(want) {
+			t.Fatalf("vector %d normalize %v: got %x want %x", i, limbs, v.Bytes(), bigToBytes(want))
+		}
+		previous := v
+		if v.Normalize().n != previous.n {
+			t.Fatalf("vector %d: normalization is not idempotent", i)
+		}
+	}
+}
+
+func TestInverseAllMagnitudes(t *testing.T) {
+	rng := rand.New(rand.NewSource(0x1a11))
+	for magnitude := 1; magnitude <= 8; magnitude++ {
+		for i := 0; i < 256; i++ {
+			v, oracle := buildMag(rng, magnitude)
+			v.Inverse()
+			oracle.Inverse()
+			normEq(t, "inverse magnitude", &v, &oracle)
+		}
+	}
+	// Non-normalized representations of zero must retain inverse(0) == 0.
+	for magnitude := uint32(0); magnitude < 8; magnitude++ {
+		var v Val
+		v.Negate(magnitude).Inverse().Normalize()
+		if !v.IsZero() {
+			t.Fatalf("inverse of zero at magnitude %d: %s", magnitude+1, v.String())
+		}
+	}
+}
+
+func TestPutBytesUncheckedBounds(t *testing.T) {
+	var v Val
+	v.SetBytes(&benchA)
+	var output [40]byte
+	for i := range output {
+		output[i] = 0xa5
+	}
+	v.PutBytesUnchecked(output[1:33])
+	for _, i := range []int{0, 33, 34, 35, 36, 37, 38, 39} {
+		if output[i] != 0xa5 {
+			t.Fatalf("serialization overwrote byte %d outside output", i)
+		}
+	}
+	if got := new(Val); got.SetByteSlice(output[1:33]) || !got.Equals(&v) {
+		t.Fatal("unaligned serialization changed the value")
+	}
+	for size := 0; size < 32; size++ {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("serialization did not panic for buffer size %d", size)
+				}
+			}()
+			v.PutBytesUnchecked(output[:size])
+		}()
+	}
+}

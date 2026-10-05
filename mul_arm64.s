@@ -42,15 +42,11 @@ TEXT ·mulArm64(SB), NOSPLIT|NOFRAME, $0-24
 	MOVD a+8(FP), S0
 	MOVD b+16(FP), S1
 
-	MOVD 0(S0), A0
-	MOVD 8(S0), A1
-	MOVD 16(S0), A2
-	MOVD 24(S0), A3
+	LDP  0(S0), (A0, A1)
+	LDP  16(S0), (A2, A3)
 	MOVD 32(S0), A4
-	MOVD 0(S1), B0
-	MOVD 8(S1), B1
-	MOVD 16(S1), B2
-	MOVD 24(S1), B3
+	LDP  0(S1), (B0, B1)
+	LDP  16(S1), (B2, B3)
 	MOVD 32(S1), B4
 
 	MOVD $0xFFFFFFFFFFFFF, MM
@@ -86,8 +82,7 @@ TEXT ·mulArm64(SB), NOSPLIT|NOFRAME, $0-24
 
 	// t3 = d.lo & M ; d >>= 52
 	AND   MM, DLO, T3
-	LSR   $52, DLO, DLO
-	ORR   DHI<<12, DLO, DLO
+	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 
 	// d += a0*b4 + a1*b3 + a2*b2 + a3*b1 + a4*b0
@@ -121,8 +116,7 @@ TEXT ·mulArm64(SB), NOSPLIT|NOFRAME, $0-24
 
 	// t4 = d.lo & M ; d >>= 52
 	AND   MM, DLO, T4
-	LSR   $52, DLO, DLO
-	ORR   DHI<<12, DLO, DLO
+	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 
 	// tx = t4 >> 48 ; t4 &= M>>4
@@ -154,8 +148,7 @@ TEXT ·mulArm64(SB), NOSPLIT|NOFRAME, $0-24
 
 	// u0 = d.lo & M ; d >>= 52 ; u0 = (u0<<4)|tx
 	AND   MM, DLO, U0
-	LSR   $52, DLO, DLO
-	ORR   DHI<<12, DLO, DLO
+	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 	LSL   $4, U0, U0
 	ORR   TX, U0, U0
@@ -170,8 +163,7 @@ TEXT ·mulArm64(SB), NOSPLIT|NOFRAME, $0-24
 	// r[0] = c.lo & M ; c >>= 52
 	AND   MM, CLO, S0
 	MOVD  S0, 0(RP)
-	LSR   $52, CLO, CLO
-	ORR   CHI<<12, CLO, CLO
+	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
 
 	// c += a0*b1 + a1*b0
@@ -204,15 +196,13 @@ TEXT ·mulArm64(SB), NOSPLIT|NOFRAME, $0-24
 	UMULH S0, RR, PHI
 	ADDS  PLO, CLO, CLO
 	ADC   PHI, CHI, CHI
-	LSR   $52, DLO, DLO
-	ORR   DHI<<12, DLO, DLO
+	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 
 	// r[1] = c.lo & M ; c >>= 52
 	AND   MM, CLO, S0
 	MOVD  S0, 8(RP)
-	LSR   $52, CLO, CLO
-	ORR   CHI<<12, CLO, CLO
+	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
 
 	// c += a0*b2 + a1*b1 + a2*b0
@@ -250,8 +240,7 @@ TEXT ·mulArm64(SB), NOSPLIT|NOFRAME, $0-24
 	// r[2] = c.lo & M ; c >>= 52
 	AND   MM, CLO, S0
 	MOVD  S0, 16(RP)
-	LSR   $52, CLO, CLO
-	ORR   CHI<<12, CLO, CLO
+	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
 
 	// c += (R<<12) * d.lo
@@ -268,8 +257,7 @@ TEXT ·mulArm64(SB), NOSPLIT|NOFRAME, $0-24
 	// r[3] = c.lo & M ; c >>= 52
 	AND   MM, CLO, S0
 	MOVD  S0, 24(RP)
-	LSR   $52, CLO, CLO
-	ORR   CHI<<12, CLO, CLO
+	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
 
 	// r[4] = c.lo + t4
@@ -283,10 +271,8 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	MOVD r+0(FP), RP
 	MOVD a+8(FP), S0
 
-	MOVD 0(S0), A0
-	MOVD 8(S0), A1
-	MOVD 16(S0), A2
-	MOVD 24(S0), A3
+	LDP  0(S0), (A0, A1)
+	LDP  16(S0), (A2, A3)
 	MOVD 32(S0), A4
 
 	MOVD $0xFFFFFFFFFFFFF, MM
@@ -316,8 +302,7 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 
 	// t3 = d.lo & M ; d >>= 52
 	AND   MM, DLO, T3
-	LSR   $52, DLO, DLO
-	ORR   DHI<<12, DLO, DLO
+	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 
 	// a4 *= 2
@@ -347,8 +332,7 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 
 	// t4 = d.lo & M ; d >>= 52
 	AND   MM, DLO, T4
-	LSR   $52, DLO, DLO
-	ORR   DHI<<12, DLO, DLO
+	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 
 	// tx = t4 >> 48 ; t4 &= M>>4
@@ -373,8 +357,7 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 
 	// u0 = d.lo & M ; d >>= 52 ; u0 = (u0<<4)|tx
 	AND   MM, DLO, U0
-	LSR   $52, DLO, DLO
-	ORR   DHI<<12, DLO, DLO
+	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 	LSL   $4, U0, U0
 	ORR   TX, U0, U0
@@ -389,8 +372,7 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	// r[0] = c.lo & M ; c >>= 52
 	AND   MM, CLO, S0
 	MOVD  S0, 0(RP)
-	LSR   $52, CLO, CLO
-	ORR   CHI<<12, CLO, CLO
+	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
 
 	// a0 *= 2
@@ -418,15 +400,13 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	UMULH S0, RR, PHI
 	ADDS  PLO, CLO, CLO
 	ADC   PHI, CHI, CHI
-	LSR   $52, DLO, DLO
-	ORR   DHI<<12, DLO, DLO
+	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 
 	// r[1] = c.lo & M ; c >>= 52
 	AND   MM, CLO, S0
 	MOVD  S0, 8(RP)
-	LSR   $52, CLO, CLO
-	ORR   CHI<<12, CLO, CLO
+	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
 
 	// c += a0*a2 + a1*a1
@@ -456,8 +436,7 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	// r[2] = c.lo & M ; c >>= 52
 	AND   MM, CLO, S0
 	MOVD  S0, 16(RP)
-	LSR   $52, CLO, CLO
-	ORR   CHI<<12, CLO, CLO
+	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
 
 	// c += (R<<12) * d.lo
@@ -474,8 +453,7 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	// r[3] = c.lo & M ; c >>= 52
 	AND   MM, CLO, S0
 	MOVD  S0, 24(RP)
-	LSR   $52, CLO, CLO
-	ORR   CHI<<12, CLO, CLO
+	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
 
 	// r[4] = c.lo + t4

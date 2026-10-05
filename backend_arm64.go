@@ -49,3 +49,20 @@ func fieldSqr(r, a *[5]uint64) {
 		sqrGeneric(r, a)
 	}
 }
+
+// sqrArm64N keeps the intermediate limbs in registers across repeated squares.
+// count must be positive.
+//
+//go:noescape
+func sqrArm64N(r, a *[5]uint64, count uint64)
+
+func fieldSqrN(r, a *[5]uint64, count uint64) {
+	if useASM {
+		sqrArm64N(r, a, count)
+		return
+	}
+	sqrGeneric(r, a)
+	for i := uint64(1); i < count; i++ {
+		sqrGeneric(r, r)
+	}
+}
