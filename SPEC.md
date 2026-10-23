@@ -42,9 +42,17 @@ Call `Normalize()` first. `Normalize` always yields magnitude 1.
 
 ## Magnitude
 
-**Magnitude** is the maximum multiple of the limb base a limb may hold. It tracks
-how far a value has drifted from normalized form and bounds the size of partial
-products so multiply/square cannot overflow the 128-bit accumulator.
+**Magnitude** bounds how far a value has drifted from normalized form and the
+size of partial products, so multiply/square cannot overflow the 128-bit
+accumulator. A normalized value has magnitude 1 and limbs `n[0..3] <= 2^52-1`
+and `n[4] <= 2^48-1`, with the represented integer strictly below `p`.
+
+A non-normalized value at magnitude `m` may have limbs
+`n[0..3] <= 2*m*(2^52-1)` and `n[4] <= 2*m*(2^48-1)`. The factor of two
+allows negation to subtract from `2*(m+1)*p` limb by limb without borrowing;
+its result has magnitude `m+1`. Magnitude 1 alone therefore does not imply a
+normalized value. Addition and multiplication by a small integer propagate
+these bounds without carrying.
 
 | Operation | Input precondition | Output magnitude |
 | --- | --- | --- |
@@ -63,11 +71,13 @@ responsibility, exactly as in dcrd. Violating them (e.g. multiplying a magnitude
 
 ### Why magnitude 8 is safe for multiply
 
-A limb at magnitude `m` is `< m·2^52`. The largest partial-product column sums a
-handful of `a_i·b_j` terms; at `m ≤ 8` each operand limb is `< 8·2^52 < 2^55`, so
-every 64×64→128 product is `< 2^110` and the column sums stay within the 128-bit
-accumulator with room for the reduction fold. This matches dcrd's documented
-limit.
+At `m ≤ 8`, each lower operand limb is at most `16*(2^52-1) < 2^56`, and
+the top limb is at most `16*(2^48-1) < 2^52`. Every 64×64→128 product is
+therefore `< 2^112`; the largest partial-product columns sum only a handful
+of these terms and retain room for the reduction fold in the 128-bit
+accumulator. The tests exercise these exact limb bounds, as well as values
+built through the public addition and negation API. The magnitude limit
+matches dcrd's documented limit.
 
 ## Aliasing
 

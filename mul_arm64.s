@@ -29,12 +29,14 @@
 #define T4   R16
 #define TX   R17
 #define U0   R19
-#define MM   R20         // 0xFFFFFFFFFFFFF  (2^52 - 1)
+#define MM   R20         // multiply mask; square reuses it for K12
+#define K12  R20         // square reduction constant R << 12
 #define RR   R21         // 0x1000003D10     ((2^256 mod p) << 4)
 #define PLO  R22         // partial product, low 64
 #define PHI  R23         // partial product, high 64
 #define S0   R24         // scratch
-#define S1   R25         // scratch (pointer staging)
+#define S1   R25         // multiply input pointer
+#define K4   R25         // square reduction constant R >> 4
 
 // func mulArm64(r, a, b *[5]uint64)
 TEXT ·mulArm64(SB), NOSPLIT|NOFRAME, $0-24
@@ -275,8 +277,11 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	LDP  16(S0), (A2, A3)
 	MOVD 32(S0), A4
 
-	MOVD $0xFFFFFFFFFFFFF, MM
+	// The square's masks encode as logical immediates, leaving two registers
+	// available for reduction constants reused later in the schedule.
 	MOVD $0x1000003D10, RR
+	LSL  $12, RR, K12
+	LSR  $4, RR, K4
 
 	// d = (a0*2)*a3 + (a1*2)*a2
 	LSL   $1, A0, S0
@@ -301,7 +306,7 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	MOVD  ZR, CHI
 
 	// t3 = d.lo & M ; d >>= 52
-	AND   MM, DLO, T3
+	AND   $0xFFFFFFFFFFFFF, DLO, T3
 	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 
@@ -324,21 +329,19 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	ADC   PHI, DHI, DHI
 
 	// d += (R<<12) * c.lo
-	LSL   $12, RR, S0
-	MUL   S0, CLO, PLO
-	UMULH S0, CLO, PHI
+	MUL   K12, CLO, PLO
+	UMULH K12, CLO, PHI
 	ADDS  PLO, DLO, DLO
 	ADC   PHI, DHI, DHI
 
 	// t4 = d.lo & M ; d >>= 52
-	AND   MM, DLO, T4
+	AND   $0xFFFFFFFFFFFFF, DLO, T4
 	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 
 	// tx = t4 >> 48 ; t4 &= M>>4
 	LSR   $48, T4, TX
-	LSR   $4, MM, S0
-	AND   S0, T4, T4
+	AND   $0xFFFFFFFFFFFF, T4, T4
 
 	// c = a0*a0
 	MUL   A0, A0, CLO
@@ -356,21 +359,20 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	ADC   PHI, DHI, DHI
 
 	// u0 = d.lo & M ; d >>= 52 ; u0 = (u0<<4)|tx
-	AND   MM, DLO, U0
+	AND   $0xFFFFFFFFFFFFF, DLO, U0
 	EXTR  $52, DLO, DHI, DLO
 	LSR   $52, DHI, DHI
 	LSL   $4, U0, U0
 	ORR   TX, U0, U0
 
 	// c += u0 * (R>>4)
-	LSR   $4, RR, S0
-	MUL   U0, S0, PLO
-	UMULH U0, S0, PHI
+	MUL   U0, K4, PLO
+	UMULH U0, K4, PHI
 	ADDS  PLO, CLO, CLO
 	ADC   PHI, CHI, CHI
 
 	// r[0] = c.lo & M ; c >>= 52
-	AND   MM, CLO, S0
+	AND   $0xFFFFFFFFFFFFF, CLO, S0
 	MOVD  S0, 0(RP)
 	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
@@ -395,7 +397,7 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	ADC   PHI, DHI, DHI
 
 	// c += (d.lo & M) * R ; d >>= 52
-	AND   MM, DLO, S0
+	AND   $0xFFFFFFFFFFFFF, DLO, S0
 	MUL   S0, RR, PLO
 	UMULH S0, RR, PHI
 	ADDS  PLO, CLO, CLO
@@ -404,7 +406,7 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	LSR   $52, DHI, DHI
 
 	// r[1] = c.lo & M ; c >>= 52
-	AND   MM, CLO, S0
+	AND   $0xFFFFFFFFFFFFF, CLO, S0
 	MOVD  S0, 8(RP)
 	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
@@ -434,15 +436,14 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	MOVD  ZR, DHI
 
 	// r[2] = c.lo & M ; c >>= 52
-	AND   MM, CLO, S0
+	AND   $0xFFFFFFFFFFFFF, CLO, S0
 	MOVD  S0, 16(RP)
 	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI
 
 	// c += (R<<12) * d.lo
-	LSL   $12, RR, S0
-	MUL   S0, DLO, PLO
-	UMULH S0, DLO, PHI
+	MUL   K12, DLO, PLO
+	UMULH K12, DLO, PHI
 	ADDS  PLO, CLO, CLO
 	ADC   PHI, CHI, CHI
 
@@ -451,7 +452,7 @@ TEXT ·sqrArm64(SB), NOSPLIT|NOFRAME, $0-16
 	ADC   ZR, CHI, CHI
 
 	// r[3] = c.lo & M ; c >>= 52
-	AND   MM, CLO, S0
+	AND   $0xFFFFFFFFFFFFF, CLO, S0
 	MOVD  S0, 24(RP)
 	EXTR  $52, CLO, CHI, CLO
 	LSR   $52, CHI, CHI

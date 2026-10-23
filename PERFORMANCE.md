@@ -106,3 +106,52 @@ go test -run '^$' \
   -bench '^(BenchmarkMul|BenchmarkSquare|BenchmarkInverse|BenchmarkSetBytes|BenchmarkPutBytes|BenchmarkNormalize)$' \
   -benchmem -cpu=1 -benchtime=150ms -count=6 .
 ```
+
+## Selective ARM64 tuning (2026-10-05)
+
+Apple M5 Pro, Go 1.27.1, `darwin/arm64`, PGO disabled, one benchmark CPU.
+Before and candidate binaries were fixed before timing and run sequentially in
+ten alternating AB/BA pairs at 300 ms per benchmark; `benchstat` compares their
+samples. All experiments reported `0 B/op` and `0 allocs/op`.
+
+The retained square kernel encodes limb masks as logical immediates and keeps
+the `R<<12`/`R>>4` reduction constants in registers. It preserves the original
+partial-product schedule, exact generic limb output, and aliasing. A separate
+comparison of the exact selected source confirms the square gain without a
+measurable change to multiply or inverse:
+
+| Operation | Before | Selected source | Time change | Statistics |
+| --- | ---: | ---: | ---: | --- |
+| `Square` | 5.974 ns | 5.691 ns | -4.75% | p<0.001, n=10 |
+| `Mul` | 7.608 ns | 7.611 ns | no significant change | p=0.897, n=10 |
+| `Inverse` | 2.482 us | 2.485 us | no significant change | p=1.000, n=10 |
+
+Earlier experiments guided selection per operation. The rejected multiply and
+repeated-square changes were restored before the final comparison:
+
+| Experiment | Before | Candidate | Time change | Statistics | Selection |
+| --- | ---: | ---: | ---: | --- | --- |
+| `Square`, masks and reduction constants | 5.885 ns | 5.617 ns | -4.55% | p=0.001, n=10 | selected and separately confirmed |
+| `Mul`, masks and reduction constants | 7.449 ns | 7.541 ns | +1.24% | p=0.017, n=10 | rejected |
+| `Inverse`, repeated-square register reuse | 2.478 us | 2.487 us | no significant change | p=0.540, n=10 | rejected |
+| `Inverse`, register reuse plus hoisted constants | 2.485 us | 2.509 us | no significant change | p=0.339, n=10 | rejected |
+
+The final source retains the square optimization and restores both the
+multiply and repeated-square kernels to their baseline instructions. A shorter
+instruction sequence does not necessarily run faster on this CPU. These local
+component measurements do not establish consumer or multi-core throughput.
+
+Deterministic tests check the exact non-normalized limb limits at magnitudes
+1..8, every repeated-square count used by the inverse chain, unchanged inputs,
+and output/input aliases. Native differential tests, forced generic and assembly
+backends, the `purego` build, the race detector, and Go 1.22.5 validation pass.
+The selected square kernel also passed a 30-second differential fuzz run with
+two workers and 4,992,361 executions against dcrd.
+
+Compile fixed binaries with `go test -pgo=off -c`, then alternate runs of:
+
+```sh
+./field.test -test.run '^$' \
+  -test.bench '^(BenchmarkMul|BenchmarkSquare|BenchmarkInverse)$' \
+  -test.benchmem -test.cpu=1 -test.benchtime=300ms -test.count=1
+```

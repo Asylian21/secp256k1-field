@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- ARM64 squaring uses immediate limb masks and retains `R<<12`/`R>>4` in
+  registers. The reduction schedule and aliasing behavior remain identical to
+  the generic backend. Ten paired Apple M5 Pro samples with Go 1.27.1 show
+  4.75% less time (p<0.001); multiply and inverse show no significant change.
+- Correct the magnitude specification: non-normalized limbs may reach twice
+  the magnitude times the limb mask, including the separate 48-bit top limb.
+
+### Added
+
+- Deterministic ARM64 multiplication, squaring, and repeated-square tests at
+  the exact limb limits for magnitudes 1..8, including aliases and the dcrd
+  oracle.
+- Paired benchmark results and rejected multiply/inverse experiments in
+  `PERFORMANCE.md`. Optimizations are selected per operation; fewer
+  instructions alone do not establish a throughput improvement.
+
 ## [0.2.0] - 2026-10-05
 
 ### Changed
